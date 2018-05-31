@@ -1,0 +1,77 @@
+library(ISLR)
+library(dplyr)
+library(caTools)
+library(ggplot2)
+library(randomForest)
+library(tree)
+library(gbm)
+library(plotly)
+library(caret)
+library(e1071)
+
+df <- College
+# Data is fine, no manipulation needed
+#Exloratory Data Analysis
+
+pl <- ggplot(df, aes(Room.Board	,Grad.Rate)) + geom_point(aes(color=factor(Private))) 
+pl1 <- pl+scale_x_continuous(breaks = seq(1780,8124, by = 500))
+#At a first glance we can see that Private schools usually have bigger Room and board costs
+#Moreover, the Graduation level seems to be higher if student studies at private school
+pl2 <- ggplot(df,aes(Private,Grad.Rate))+geom_boxplot(aes(color=Private)) +scale_y_continuous(breaks = seq(0,120,5))
+#Boxplotting gives us a nice prove that studet of a private school has bigger chances to  
+#graduate rather than student from public school. Though we see 1 significant outlier
+#that lies above 100 points. It may seem to be a mistake in the given data.
+Private <- subset(df,Private== 'Yes')
+Public <- subset(df,Private== 'No')
+summary(Private$Grad.Rate)
+summary(Public$Grad.Rate)
+#In numbers, 1st-3rd Qu. of public shool is 46-65, while in private 58-81 and mean=median
+pl3 <- ggplot(df,aes(F.Undergrad)) + geom_histogram(aes(fill=Private), color = 'black', bins = 50)
+
+pl4 <- ggplot(df,aes(Top10perc)) + geom_histogram(aes(fill=Private),binwidth = 5, color = 'black') 
+pl5 <- ggplotly(pl4)
+print(pl5)
+#Eliminating an error in data mentioned above
+subset(df, Grad.Rate > 100)
+df["Cazenovia College", "Grad.Rate"] <- 100
+#Splitting data
+set.seed(1)
+blab <- sample.split(df$Private, SplitRatio = 7/10)
+train <- subset(df, blab == T)
+test <- subset(df, blab == F)
+#Building a model
+tree.basic <- rpart(Private~., data = train, method='class')
+pred.basic.tree <- predict(tree.basic,test)
+
+response <- as.data.frame(pred.basic.tree)
+response$resp <- ifelse(response$Yes >= 0.5, 'Yes', 'No')
+table(test$Private,response$resp)
+prp(tree.basic)
+#If you use tree package you cannot use prp as it is integrated with rpart pack
+tree.random.for1 <- randomForest(Private~.,data = train, importance = T)
+#Misclassification error : 0.932
+tree.random.for2 <- randomForest(Private~.,data = train, importance = T, mtry=17)
+#Misclassification error : 0.93
+varImpPlot(tree.random.for)
+varImpPlot(tree.random.for2)
+pred.for <- predict(tree.random.for,test)
+table(pred.for,test$Private)
+print(paste('The accuracy of prediction for random forest is:',round(0.9613734,2)))
+#Boosting 
+tree.boosted <- gbm((unclass(Private)-1)~.,data = train, distribution = 'bernoulli')
+#Was receiving: Bernoulli requires the response to be in {0,1} but soled by unclassing
+#There were 17 predictors of which 2 had non-zero influence.
+par(mfrow=c(1,2))
+plot(tree.boosted, i = 'F.Undergrad')
+plot(tree.boosted, i = 'Outstate')
+
+pre.boost <- predict(tree.boosted,test)
+
+grid<-expand.grid(.n.trees=seq(200,500,by=200),.interaction.depth=seq(1,3,by=2),.shrinkage=seq(.01,.09,by=.04),
+                  .n.minobsinnode=seq(1,5,by=2)) #grid features
+control<-trainControl(method="CV",number = 10) #control
+gbm.lfp.train<-train(Private~.,data=train,method='gbm',trControl=control,tuneGrid=grid)
+#The final values used for the model were n.trees = 200, interaction.depth =
+#1, shrinkage = 0.05 and n.minobsinnode = 5.
+#It takes a while to compute all options for gdm.lfp.train
+print(paste('The accuracy of prediction for boosted tree is:',round(0.9430252,2)))
