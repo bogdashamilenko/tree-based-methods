@@ -45,8 +45,19 @@ pred.basic.tree <- predict(tree.basic,test)
 
 response <- as.data.frame(pred.basic.tree)
 response$resp <- ifelse(response$Yes >= 0.5, 'Yes', 'No')
+# Or another way to merge columnts through creating a custom function 
+   tree.preds <- as.data.frame(tree.preds)
+   joiner <- function(x){
+      if (x>=0.5){
+         return('Yes')
+     }else{
+         return("No")
+     }
+  }
+    tree.preds$Private <- sapply(tree.preds$Yes,joiner)
 table(test$Private,response$resp)
 prp(tree.basic)
+
 #If you use tree package you cannot use prp as it is integrated with rpart pack
 tree.random.for1 <- randomForest(Private~.,data = train, importance = T)
 #Misclassification error : 0.932
@@ -59,7 +70,7 @@ table(pred.for,test$Private)
 print(paste('The accuracy of prediction for random forest is:',round(0.9613734,2)))
 #Boosting 
 tree.boosted <- gbm((unclass(Private)-1)~.,data = train, distribution = 'bernoulli')
-#Was receiving: Bernoulli requires the response to be in {0,1} but soled by unclassing
+#Was receiving: Bernoulli requires the response to be in {0,1} but solved by unclassing
 #There were 17 predictors of which 2 had non-zero influence.
 par(mfrow=c(1,2))
 plot(tree.boosted, i = 'F.Undergrad')
